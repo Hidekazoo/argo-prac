@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: pipeline-cli-workflow
+spec:
+  entrypoint: pipeline
+  templates:
+    - name: pipeline
+      steps:
+        - - name: fetch
+            templateRef:
+              name: pipeline-cli-template
+              template: run-cli
+            arguments:
+              parameters:
+                - name: command
+                  value: fetch
+        - - name: transform
+            templateRef:
+              name: pipeline-cli-template
+              template: run-cli
+            arguments:
+              parameters:
+                - name: command
+                  value: transform
+        - - name: report
+            templateRef:
+              name: pipeline-cli-template
+              template: run-cli
+            arguments:
+              parameters:
+                - name: command
+                  value: report

@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: fanout
+spec:
+  entrypoint: main
+  onExit: handle-failures
+  templates:
+    - name: main
+      parallelism: 3
+      steps:
+        # Step 1: リストを取得
+        - - name: get-list
+            template: generate-list
+
+        # Step 2: リストの各要素を3並列で処理（失敗しても続行）
+        - - name: process
+            template: process-item
+            continueOn:
+              failed: true
+            arguments:
+              parameters:
+                - name: item
+                  value: "{{item}}"
+            withParam: "{{steps.get-list.outputs.parameters.list}}"
+
+    - name: generate-list
+      container:
+        image: pipeline-cli:latest
+        imagePullPolicy: Never
+        command: [sh, -c]
+        args:
+          - pipeline-cli list > /tmp/list.json
+      outputs:
+        parameters:
+          - name: list
+            valueFrom:
+              path: /tmp/list.json
+
+    - name: process-item
+      inputs:
+        parameters:
+          - name: item
+      container:
+        image: pipeline-cli:latest
+        imagePullPolicy: Never
+        command: ["pipeline-cli"]
+        args: ["process", "--item", "{{inputs.parameters.item}}"]
+
+    - name: handle-failures
+      container:
+        image: pipeline-cli:latest
+        imagePullPolicy: Never
+        command: [sh, -c]
+        args:
+          - |
+            echo '{{workflow.failures}}' > /tmp/failures.json
+            if [ "$(cat /tmp/failures.json)" = "[]" ]; then
+              echo "[exit-handler] All items succeeded."
+            else
+              echo "[exit-handler] Failed items detected:"
+              cat /tmp/failures.json
+            fi
